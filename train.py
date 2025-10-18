@@ -217,7 +217,7 @@ def train_interp(X: np.ndarray, A: np.ndarray,
 
     # HOLDOUT with both thresholds
     print("\n=== HOLDOUT (final) ===")
-    print(f"  AUROC: {roc_auc_score(hold_true, hold_scores):.3f}  AUPR: {average_precision_score(hold_true, hold_scores)::.3f}")
+    print(f"  AUROC: {roc_auc_score(hold_true, hold_scores):.3f}  AUPR: {average_precision_score(hold_true, hold_scores):.3f}")
 
     # fixed threshold
     hold_pred_fixed = binarize(hold_scores, thr_fixed)
