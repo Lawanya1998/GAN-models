@@ -45,6 +45,7 @@ class PairInterpDataset(Dataset):
         g = torch.empty(1).uniform_(self.g_lo, self.g_hi).item()
         return x, a, torch.tensor(g, dtype=torch.float32)
 
+
 # ---------------------------
 # AE bootstrap split
 # ---------------------------
@@ -155,7 +156,8 @@ def train_interp(X: np.ndarray, A: np.ndarray,
 
             # 1) D step (regress gamma on generated)
             with torch.no_grad():
-                y = G(x, a, gamma)
+                y = G(x, a, gamma)          # generated interpolation
+
             pred = D(y)
             lossD = nn.functional.mse_loss(pred, gamma)
             optD.zero_grad(); lossD.backward(); optD.step()
