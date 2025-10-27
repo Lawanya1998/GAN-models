@@ -123,7 +123,7 @@ def precision_at_k(scores: np.ndarray, y_true: np.ndarray, k: float) -> float:
 def train_interp(X: np.ndarray, A: np.ndarray,
                  val_w: np.ndarray, val_y: np.ndarray,
                  hold_w: np.ndarray, hold_y: np.ndarray,
-                 hidden=64, epochs=50, batch=32, lr=1e-3,
+                 hidden=64, epochs=50, batch=64, lr=1e-3,
                  lam0=1.0, lam1=1.5, device="cpu",
                  patience=6, run_dir="runs"):
     os.makedirs(run_dir, exist_ok=True)
