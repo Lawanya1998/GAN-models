@@ -1,102 +1,101 @@
 # main.py
-import os, argparse, time
+# main.py
+import os, time, argparse
 import numpy as np
 import torch
 
 from data import (
-    load_train_windows, load_test_by_file,
-    fit_scaler_on_windows, apply_scaler_windows, concat_splits
+    load_split_windows, split_train_XA,
+    fit_scaler_on_windows, apply_scaler_windows, concat_splits, list_csvs
 )
-from train import set_seed, bootstrap_train_split, train_interp
+from train import train_interp_gan
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Interpolation-based anomaly scoring")
-    p.add_argument("--data_root", type=str, default="data", help="path containing train/, test/, test_labels/")
-    p.add_argument("--window", type=int, default=64)
+    p = argparse.ArgumentParser(description="GAN-style interpolation anomaly detection (time-series windows)")
+    p.add_argument("--data_root", type=str, default="data", help="folder containing train/ and test/")
+    p.add_argument("--window", type=int, default=32)
     p.add_argument("--stride", type=int, default=8)
-    p.add_argument("--label_policy", type=str, default="any", choices=["any", "majority"])
+    p.add_argument("--label_policy", type=str, default="any", choices=["any","majority"])
+    p.add_argument("--label_name", type=str, default="Label (common/all)")
+    p.add_argument("--rnn", type=str, default="gru", choices=["gru","lstm"])
 
-    # Model/opt
-    p.add_argument("--ae_hidden", type=int, default=64)
-    p.add_argument("--ae_epochs", type=int, default=15)
-    p.add_argument("--interp_hidden", type=int, default=64)
-    p.add_argument("--interp_epochs", type=int, default=50)
-    p.add_argument("--batch_size", type=int, default=32)
+    # Training
+    p.add_argument("--hidden", type=int, default=64)
+    p.add_argument("--epochs", type=int, default=30)
+    p.add_argument("--batch_size", type=int, default=64)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--lam0", type=float, default=1.0)
     p.add_argument("--lam1", type=float, default=1.5)
-    p.add_argument("--patience", type=int, default=6)
     p.add_argument("--seed", type=int, default=1337)
 
-    # Bootstrap split
-    p.add_argument("--p_norm", type=float, default=0.8, help="fraction kept as normals (<= percentile)")
-    p.add_argument("--p_anom", type=float, default=0.1, help="fraction kept as anomalies (>= percentile from top)")
-
-    # VAL / HOLDOUT filenames
-    default_val = "machine-1-3.txt"
-    default_hold = "machine-1-7.txt"
-    p.add_argument("--val_files", type=str, default=default_val, help="comma-separated test file names for validation")
-    p.add_argument("--holdout_files", type=str, default=default_hold, help="comma-separated test file names for holdout")
-
     # IO
-    p.add_argument("--run_dir", type=str, default=None, help="output dir (default runs/run-<ts>)")
+    p.add_argument("--run_dir", type=str, default=None)
     return p.parse_args()
+
+def set_seed(seed=1337):
+    import random
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
 def main():
     args = parse_args()
     set_seed(args.seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    # Output dir
     if args.run_dir is None:
         ts = time.strftime("%Y%m%d-%H%M%S")
         args.run_dir = os.path.join("runs", f"run-{ts}")
     os.makedirs(args.run_dir, exist_ok=True)
 
-    # 1) Load data
-    train_w = load_train_windows(args.data_root, args.window, args.stride)
-    by_file = load_test_by_file(args.data_root, args.window, args.stride, args.label_policy)
-    print("Train windows:", train_w.shape, "| Test files:", list(by_file.keys()))
-
-    # 2) Scale (fit on train only)
-    scaler = fit_scaler_on_windows(train_w)
-    train_w = apply_scaler_windows(train_w, scaler)
-
-    # Compose VAL/HOLDOUT splits by filename
-    val_names = [s.strip() for s in args.val_files.split(",") if s.strip()]
-    hold_names= [s.strip() for s in args.holdout_files.split(",") if s.strip()]
-
-    val_w, val_y     = concat_splits(by_file, val_names)
-    hold_w, hold_y   = concat_splits(by_file, hold_names)
-
-    # scale test splits
-    val_w  = apply_scaler_windows(val_w, scaler)
-    hold_w = apply_scaler_windows(hold_w, scaler)
-
-    print("VAL windows:", val_w.shape, "HOLDOUT windows:", hold_w.shape)
-
-    if len(train_w)==0 or len(val_w)==0 or len(hold_w)==0:
-        raise RuntimeError("Empty windows in one of the splits.")
-
-    # 3) Bootstrap split (AE)
-    X, A = bootstrap_train_split(train_w,
-                                 hidden=args.ae_hidden, epochs=args.ae_epochs,
-                                 batch=max(32, args.batch_size), lr=args.lr,
-                                 device=device, p_norm=args.p_norm, p_anom=args.p_anom)
+    # 1) Load TRAIN windows and split X(normal) / A(anomaly)
+    train_by_file = load_split_windows(args.data_root, "train", args.window, args.stride, args.label_name, args.label_policy)
+    X, A = split_train_XA(train_by_file)
+    print(f"[TRAIN] normals={len(X)} anomalies={len(A)}  (window={args.window}, stride={args.stride})")
     if len(X)==0 or len(A)==0:
-        raise RuntimeError("Bootstrap produced empty X or A. Adjust p_norm/p_anom or AE settings.")
+        raise RuntimeError("Need non-empty normals and anomalies in TRAIN.")
 
-    # 4) Interp train + eval
-    _ = train_interp(X, A,
-                     val_w, val_y,
-                     hold_w, hold_y,
-                     hidden=args.interp_hidden, epochs=args.interp_epochs,
-                     batch=args.batch_size, lr=args.lr, lam0=args.lam0, lam1=args.lam1,
-                     device=device, patience=args.patience, run_dir=args.run_dir)
+    # Fit scaler on TRAIN only (both X and A)
+    train_all = np.concatenate([X, A], axis=0)
+    scaler = fit_scaler_on_windows(train_all)
+    X = apply_scaler_windows(X, scaler)
+    A = apply_scaler_windows(A, scaler)
 
-    print(f"\nDone. Artifacts in: {args.run_dir}")
+    # 2) Load TEST windows (auto: first file as VAL, rest as HOLDOUT)
+    test_by_file = load_split_windows(args.data_root, "test", args.window, args.stride, args.label_name, args.label_policy)
+    test_files = sorted(list(test_by_file.keys()))
+    if not test_files:
+        raise RuntimeError("No test CSVs found under data/test.")
+
+    val_name = test_files[0]         # simple heuristic; change if you want
+    hold_names = test_files[1:] if len(test_files) > 1 else []
+    val_w, val_y = test_by_file[val_name]
+    val_w = apply_scaler_windows(val_w, scaler)
+
+    hold_splits = {}
+    for n in hold_names:
+        w, y = test_by_file[n]
+        hold_splits[n] = (apply_scaler_windows(w, scaler), y)
+
+    print(f"[VAL] {val_name}  windows={len(val_w)}")
+    print(f"[HOLDOUT] files={len(hold_splits)}")
+
+    # 3) Train + evaluate
+    train_interp_gan(
+        X, A,
+        val_split=(val_w, val_y),
+        hold_splits=hold_splits,
+        hidden=args.hidden, epochs=args.epochs, batch=args.batch_size, lr=args.lr,
+        lam0=args.lam0, lam1=args.lam1,
+        rnn=args.rnn,
+        device=device,
+        run_dir=args.run_dir
+    )
+
+    print("\nDone. Artifacts in:", args.run_dir)
     print("  - best_D.pt, best_G.pt")
-    print("  - val_thr_star.npy, val_pos_rate.npy")
+    print("  - val_stats.json, summary.json")
 
 if __name__ == "__main__":
     main()
