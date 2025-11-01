@@ -1,24 +1,11 @@
-﻿venv/
+venv/
 .venv/
 __pycache__/
 *.pyc
-
-# training artifacts & logs
 runs/
 logs/
 *.pt
 *.out
 *.err
-
-# OS/editor
-.DS_Store
-Thumbs.db
 .vscode/
-
-# binaries
 *.dll
-*.whl
-
-# datasets (optional)
-data/
-!data/.gitkeep
