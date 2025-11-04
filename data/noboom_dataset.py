@@ -71,33 +71,38 @@ class NoBoomDataset(torch.utils.data.Dataset):
             del time_series
 
     def file_list(self) -> list[str]:
-        with open(os.path.join('..', 'metadata', 'datasets', f'{self.dataset}_{self.version}.txt')) as file:
-            return file.read().split('\n')
+        base_dir = os.path.dirname(__file__)
+        meta_path = os.path.join(
+           base_dir,                 # -> .../GAN/data
+           'metadata', 'datasets',
+           f'{self.dataset}_{self.version}.txt'
+        )
+        with open(meta_path, 'r', encoding='utf-8') as file:
+            return [line.strip() for line in file.read().split('\n') if line.strip()]
+
 
     def filter_file_list(self, file_list: list[str]) -> list[str]:
-        """
-        Filter which files belong to train/test split.
-        Special rule: all CSVs inside 'operating_point_001' are always
-        considered training data, even if they start with 'test_'.
-        """
-        prefixes = []
         if self.train:
-            prefixes.append('train_normal')
+            prefixes = ['train_normal']
+            if self.train_anomalies:
+                prefixes.append('train_anormal')
         else:
-            prefixes.extend(['test_normal', 'test_anormal'])
+            prefixes = ['test_normal', 'test_anormal']
 
-        if self.train_anomalies:
-            prefixes.append('train_anormal')
+    # first, apply normal prefix selection
+        selected = [p for p in file_list if any(pref in p for pref in prefixes)]
 
-        selected = []
-        for file in file_list:
-            # ✅ Override rule for this dataset
-            if 'operating_point_001' in file and self.train:
-                selected.append(file)
-                continue
-            # Normal filtering logic
-            if any(pref in file for pref in prefixes):
-                selected.append(file)
+    # apply the operating_point_001 override deterministically
+        if self.train:
+            op1_files = [p for p in file_list if 'operating_point_001' in p]
+        # merge and de-duplicate
+            seen = set(selected)
+            for p in op1_files:
+                if p not in seen:
+                    selected.append(p); seen.add(p)
+        else:
+            selected = [p for p in selected if 'operating_point_001' not in p]
+
         return selected
 
     def __getitem__(self, item: int) -> tuple[tuple[torch.Tensor], tuple[torch.Tensor]]:

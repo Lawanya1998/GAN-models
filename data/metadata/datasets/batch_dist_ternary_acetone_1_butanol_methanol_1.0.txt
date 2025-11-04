@@ -20,7 +20,6 @@ operating_point_007/test_anormal_experiment_001.csv
 operating_point_007/train_normal_experiment_001.csv
 
 operating_point_008/test_anormal_experiment_001.csv
-operating_point_008/train_normal_experiment_001.csv
 
 operating_point_009/test_anormal_experiment_001.csv
 operating_point_009/train_normal_experiment_001.csv
