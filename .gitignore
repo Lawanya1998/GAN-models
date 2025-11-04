@@ -1,0 +1,12 @@
+
+venv/
+.venv/
+__pycache__/
+*.pyc
+runs/
+logs/
+*.pt
+*.out
+*.err
+.vscode/
+*.dll
