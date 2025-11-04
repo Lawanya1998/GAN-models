@@ -4,7 +4,7 @@ import os, time, argparse
 import numpy as np
 import torch
 
-from data import (
+from data.data import (
     load_split_windows, split_train_XA,
     fit_scaler_on_windows, apply_scaler_windows, concat_splits, list_csvs
 )

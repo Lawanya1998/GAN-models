@@ -1,0 +1,19 @@
+﻿SensorName,Description
+LS701,Fluid level in reboiler vessel
+LS702,Fluid level in buffer vessel
+T701,Temperature sensor heating jacket lower hemisphere reboiler vessel
+T702,Temperature sensor heating jacket upper hemisphere reboiler vessel
+T703,Temperature sensor liquid residue reboiler vessel
+T704,Temperature sensor heating jacket (middle)
+T706,Temperature sensor heating jacket (bottom)
+T708,Temperature sensor heating jacket (top)
+T709,Temperature sensor in distillation column
+T711,Temperature sensor in distillation column
+T712,Temperature sensor in distillation column
+T705,Temperature sensor in distillation column
+FT703,Mass flow sensor product
+FT704,Mass flow sensor reflux
+PDI701,Pressure difference along distillation column
+PDI702,Static pressure sensor in buffer vessel
+PY23,Pressure sensor distillation column
+FYI702,Mass flow cooling medium
